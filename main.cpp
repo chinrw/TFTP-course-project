@@ -8,7 +8,13 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <unistd.h>
+
 #define BUF_LEN 512
+#define RRQ 1
+#define WRQ 2
+#define DATA 3
+#define ACK 4
+#define ERROR 5
 
 void handle_read(struct sockaddr_in* sock_info, char* buffer, int buffer_len);
 void handle_write(struct sockaddr_in* sock_info, char* buffer, int buffer_len);
