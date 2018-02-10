@@ -15,6 +15,7 @@
 #define DATA 3
 #define ACK 4
 #define ERROR 5
+#define PORT 2369
 
 void handle_read(struct sockaddr_in* sock_info, char* buffer, int buffer_len);
 void handle_write(struct sockaddr_in* sock_info, char* buffer, int buffer_len);
@@ -47,7 +48,7 @@ int main() {
 	memset(&sock_info, 0, sockaddr_len);
 
 	sock_info.sin_addr.s_addr = htonl(INADDR_ANY);
-	sock_info.sin_port = htons(69);
+	sock_info.sin_port = htons(PORT);
 	sock_info.sin_family = PF_INET;
 
 	if ((server_socket = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {
