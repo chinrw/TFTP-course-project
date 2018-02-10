@@ -1,0 +1,30 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/Users/chin39/Documents/Github/TFTP-course-project/main.cpp
+cstdio
+-
+sys/socket.h
+-
+sys/types.h
+-
+signal.h
+-
+netinet/ip.h
+-
+string.h
+-
+arpa/inet.h
+-
+stdlib.h
+-
+errno.h
+-
+zconf.h
+-
+
