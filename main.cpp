@@ -7,9 +7,12 @@
 #include <arpa/inet.h>
 #include <stdlib.h>
 #include <errno.h>
-
-
+#include <unistd.h>
 #define BUF_LEN 512
+
+void handle_read(struct sockaddr_in* sock_info, char* buffer, int buffer_len);
+void handle_write(struct sockaddr_in* sock_info, char* buffer, int buffer_len);
+
 
 int main() {
 	ssize_t n;
@@ -99,4 +102,12 @@ int main() {
 	if (opcode == WRQ) handle_write(&sock_info, buffer, BUF_LEN);
 
 	return 0;
+}
+
+void handle_read(struct sockaddr_in* sock_info, char* buffer, int buffer_len) {
+
+}
+
+void handle_write(struct sockaddr_in* sock_info, char* buffer, int buffer_len) {
+
 }
