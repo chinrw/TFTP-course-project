@@ -1,2 +1,5 @@
 !main.cpp
+!CMakeLists.txt
 *.xml
+/cmake-build-debug
+/.idea
