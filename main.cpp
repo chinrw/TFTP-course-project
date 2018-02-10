@@ -31,12 +31,12 @@ int main() {
 	struct sockaddr_in sock_info;
 
 	/* Set up interrupt handlers */
-	act.sa_handler = SIGCHLD;
+	act.sa_handler = reinterpret_cast<void (*)(int)>(SIGCHLD);
 	sigemptyset(&act.sa_mask);
 	act.sa_flags = 0;
 	sigaction(SIGCHLD, &act, NULL);
 
-	act.sa_handler = SIGALRM;
+	act.sa_handler = reinterpret_cast<void (*)(int)>(SIGALRM);
 	sigemptyset(&act.sa_mask);
 	act.sa_flags = 0;
 	sigaction(SIGALRM, &act, NULL);
