@@ -69,7 +69,6 @@ int main() {
     getsockname(server_socket, (struct sockaddr *) &sock_info, &sockaddr_len);
 
     printf("%d\n", ntohs(sock_info.sin_port));
-
     /* Receive the first packet and deal w/ it accordingly */
     while (true) {
         intr_recv:
@@ -99,10 +98,13 @@ int main() {
         } else {
             if (fork() == 0) {
                 /* Child - handle the request */
+
                 close(server_socket);
+                printf("child process , pid is %d\n", getpid());
                 break;
             } else {
                 /* Parent - continue to wait */
+                printf("parent process, pid is %d\n", getpid());
             }
         }
     }
