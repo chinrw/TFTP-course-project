@@ -1,12 +1,12 @@
 #include <cstdio>
 #include <sys/socket.h>
 #include <sys/types.h>
-#include <signal.h>
+#include <csignal>
 #include <netinet/ip.h>
-#include <string.h>
+#include <cstring>
 #include <arpa/inet.h>
-#include <stdlib.h>
-#include <errno.h>
+#include <cstdlib>
+#include <cerrno>
 #include <unistd.h>
 
 #define BUF_LEN 512
