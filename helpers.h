@@ -28,7 +28,7 @@ typedef struct {
 	unsigned short int block;
 } TFTP_Ack;
 
-struct tftpx_packet{
+struct tftp_packet{
 	ushort cmd;
 	union{
 		ushort code;
@@ -39,10 +39,10 @@ struct tftpx_packet{
 	char data[DATA_SIZE];
 };
 
-struct tftpx_request{
+struct tftp_request{
 	int size;
 	struct sockaddr_in client;
-	struct tftpx_packet packet;
+	struct tftp_packet packet;
 };
 
 /* Returns 0 for sucess, otherwise -1. */
