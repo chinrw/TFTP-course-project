@@ -201,7 +201,7 @@ void handle_write(int sock, struct tftp_request *request) {
     }
 
     if (strlen(r_path) + strlen(conf_document_root) > sizeof(fullpath) - 1) {
-        printf("Request path too long. %d\n", strlen(r_path) + strlen(conf_document_root));
+        printf("Request path too long. %d\n", static_cast<int>(strlen(r_path) + strlen(conf_document_root)));
         return;
     }
 
