@@ -8,83 +8,73 @@
 #include <cstdlib>
 #include <cerrno>
 #include <unistd.h>
-#include <iostream>
 #include "helpers.h"
-
-//using namespace std;
 
 void child_process(struct tftp_request *request);
 
 int send_ack(int sock, struct tftp_packet *packet, int size);
 
-void handle_read(int sock, struct tftp_request *request);
+void handle_read(int socket, struct tftp_request *request);
 
-void handle_write(int sock, struct tftp_request *request);
+void handle_write(int socket, struct tftp_request *request);
 
-int send_packet(int sock, struct tftp_packet *packet, int size);
-
+int send_packet(int socket, struct tftp_packet *packet, int size);
 
 int main(int argc, char **argv) {
-    int sock;
-    socklen_t addr_len;
-    pthread_t t_id;
+
+    socklen_t addr_len = sizeof(struct sockaddr_in);;
+    struct tftp_request* request;
     struct sockaddr_in server;
-    unsigned short port = PORT;
-
-    if ((sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) {
-        printf("Server socket could not be created.\n");
-        return 0;
-    }
-
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = htons(port);
+    server.sin_port = htons(PORT);
 
-    if (bind(sock, (struct sockaddr *) &server, sizeof(server)) < 0) {
-        printf("Server bind failed. Server already running? Proper permissions?\n");
-        return 2;
+    int udp_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (udp_socket < 0) {
+        perror("server socket");
+        exit(EXIT_FAILURE);
     }
 
-    printf("Server started at 0.0.0.0:%d.\n", port);
+    if (bind(udp_socket, (struct sockaddr *) &server, sizeof(server)) < 0) {
+        perror("server bind");
+        exit(EXIT_FAILURE);
+    }
 
-    struct tftp_request *request;
-    addr_len = sizeof(struct sockaddr_in);
+    printf("server started at port [%d]\n", PORT);
+
     while (1) {
-        request = (struct tftp_request *) malloc(sizeof(struct tftp_request));
-        memset(request, 0, sizeof(struct tftp_request));
-        request->size = recvfrom(
-                sock, &(request->packet), MAX_REQUEST_SIZE, 0,
-                (struct sockaddr *) &(request->client),
-                &addr_len);
+        request = (struct tftp_request *) calloc(1,sizeof(struct tftp_request));
+        request->size = recvfrom(udp_socket, &(request->packet), MAX_REQUEST_SIZE, 0,
+                        (struct sockaddr *) &(request->client),&addr_len);
+        if(request->size < 0){
+            perror("recvfrom");
+            continue;
+         }
         request->packet.cmd = ntohs(request->packet.cmd);
-        printf("Receive request.\n");
-        int pid = fork();
+        printf("receive message\n");
+        //fork
+        pid_t pid = fork();
         if (pid < 0) {
-            perror("fork\n");
+            perror("fork");
         } else if (pid == 0) {
-            printf("child\n");
+            //child
             child_process(request);
             break;
         } else {
-            printf("parent\n");
+            //parent
+            continue;
         }
     }
-
     return 0;
 }
 
 void child_process(struct tftp_request *request) {
-    printf("sth in child process\n");
-    int sock;
+    printf("child process\n");
     struct sockaddr_in server;
     static socklen_t addr_len = sizeof(struct sockaddr_in);
 
-    // if(request->size <= 0){
-    // 	printf("Bad request.\n");
-    // 	return NULL;
-    // }//TODO
-
-    if ((sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) {
+    int udp_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (udp_socket < 0) {
         perror("child socket");
         exit(EXIT_FAILURE);
     }
@@ -93,67 +83,60 @@ void child_process(struct tftp_request *request) {
     server.sin_addr.s_addr = INADDR_ANY;
     server.sin_port = 0;
 
-    if (bind(sock, (struct sockaddr *) &server, sizeof(server)) < 0) {
+    if (bind(udp_socket, (struct sockaddr *) &server, sizeof(server)) < 0) {
         perror("child bind");
         exit(EXIT_FAILURE);
     }
 
-    if (connect(sock, (struct sockaddr *) &(request->client), addr_len) < 0) {
+    if (connect(udp_socket, (struct sockaddr *) &(request->client), addr_len) < 0) {
         perror("child connect");
         exit(EXIT_FAILURE);
     }
 
     // Choose handler
-    switch (request->packet.cmd) {
-        case RRQ:
-            printf("RRQ called.\n");
-            handle_read(sock, request);
-            break;
-        case WRQ:
-            printf("WRQ called.\n");
-            handle_write(sock, request);
-            break;
-        default:
-            perror("Illegal operation");
-            break;
+    if(request->packet.cmd == RRQ){
+        printf("RRQ\n");
+        handle_read(udp_socket, request);
+    }
+    else if(request->packet.cmd == WRQ){
+        printf("WRQ\n");
+        handle_write(udp_socket, request);
+    }
+    else{
+        perror("invalid request");
     }
     free(request);
-    close(sock);
+    close(udp_socket);
     exit(EXIT_SUCCESS);
 }
 
-void handle_read(int sock, struct tftp_request *request) {
+void handle_read(int socket, struct tftp_request *request) {
     struct tftp_packet snd_packet;
-    char fullpath[MAXFILENAMELENGTH];
-    char *r_path = request->packet.filename;    // request file
-    char *mode = r_path + strlen(r_path) + 1;
-    char *blocksize_str = mode + strlen(mode) + 1;
+    char fullpath[MAXFILENAMELENGTH] = {0};
+    char* r_path = request->packet.filename;// request file
+    char* mode = r_path + strlen(r_path) + 1;
+    char* blocksize_str = mode + strlen(mode) + 1;
     int blocksize = atoi(blocksize_str);
 
     if (blocksize <= 0 || blocksize > DATA_SIZE) {
         blocksize = DATA_SIZE;
     }
 
-    if (strlen(r_path) + strlen(conf_document_root) > sizeof(fullpath) - 1) {
-        perror("Request path too long");
+    if (strlen(r_path) + strlen(DEFAULT_DIRECTORY) >= MAXFILENAMELENGTH) {
+        perror("request path too long");
         return;
     }
 
     // build fullpath
-    memset(fullpath, 0, sizeof(fullpath));
-    strcpy(fullpath, conf_document_root);
+    strcpy(fullpath, DEFAULT_DIRECTORY);
     if (r_path[0] != '/') {
         strcat(fullpath, "/");
     }
     strcat(fullpath, r_path);
-    printf("rrq: \"%s\", blocksize=%d\n", fullpath, blocksize);
 
-    //if(!strncasecmp(mode, "octet", 5) && !strncasecmp(mode, "netascii", 8)){
-    //	// send error packet
-    //	return;
-    //}
+    printf("RRQ: \"%s\", blocksize=%d\n", fullpath, blocksize);
 
-    FILE *fp = fopen(fullpath, "r");
+    FILE* fp = fopen(fullpath, "r");
     if (fp == NULL) {
         perror("File not exists!\n");
         return;
@@ -166,16 +149,15 @@ void handle_read(int sock, struct tftp_request *request) {
         memset(snd_packet.data, 0, sizeof(snd_packet.data));
         snd_packet.block = htons(block);
         s_size = static_cast<int>(fread(snd_packet.data, 1, static_cast<size_t>(blocksize), fp));
-        if (send_packet(sock, &snd_packet, s_size + 4) == -1) {
+        if (send_packet(socket, &snd_packet, s_size + 4) == -1) {
             fprintf(stderr, "Error occurs when sending packet.block = %d.\n", block);
-            goto rrq_error;
+            fclose(fp);
+            return;
         }
         block++;
     } while (s_size == blocksize);
 
-    printf("\nSend file end.\n");
-
-    rrq_error:
+    printf("file sent\n");
     fclose(fp);
 }
 
@@ -200,14 +182,14 @@ void handle_write(int sock, struct tftp_request *request) {
         blocksize = DATA_SIZE;
     }
 
-    if (strlen(r_path) + strlen(conf_document_root) > sizeof(fullpath) - 1) {
-        printf("Request path too long. %d\n", static_cast<int>(strlen(r_path) + strlen(conf_document_root)));
+    if (strlen(r_path) + strlen(DEFAULT_DIRECTORY) > sizeof(fullpath) - 1) {
+        printf("Request path too long. %d\n", strlen(r_path) + strlen(DEFAULT_DIRECTORY));
         return;
     }
 
     // build fullpath
     memset(fullpath, 0, sizeof(fullpath));
-    strcpy(fullpath, conf_document_root);
+    strcpy(fullpath, DEFAULT_DIRECTORY);
     if (r_path[0] != '/') {
         strcat(fullpath, "/");
     }
@@ -279,44 +261,32 @@ void handle_write(int sock, struct tftp_request *request) {
 
     wrq_error:
     fclose(fp);
-
     return;
-
 }
 
-int send_packet(int sock, struct tftp_packet *packet, int size) {
-    struct tftp_packet rcv_packet;
-    int time_wait_ack = 0;
-    int rxmt = 0;
-    int r_size = 0;
 
-    for (rxmt = 0; rxmt < PKT_MAX_RXMT; rxmt++) {
+int send_packet(int socket, struct tftp_packet *packet, int size) {
+    struct tftp_packet rcv_packet;
+    int retry_counter = 0;
+    for (retry_counter = 0; retry_counter <= MAX_RETRY_RECV; retry_counter++) {
         printf("Send block=%d\n", ntohs(packet->block));
-        if (send(sock, packet, size, 0) != size) {
+        if (send(socket, packet, size, 0) != size) {
             return -1;
         }
-        for (time_wait_ack = 0; time_wait_ack < PKT_RCV_TIMEOUT; time_wait_ack += 10000) {
-            // Try receive(Nonblock receive).
-            r_size = static_cast<int>(recv(sock, &rcv_packet, sizeof(struct tftp_packet), MSG_DONTWAIT));
-            if (r_size >= 4 && rcv_packet.cmd == htons(ACK) && rcv_packet.block == packet->block) {
-                //printf("ACK: block=%d\n", ntohs(rcv_packet.block));
-                // Valid ACK
-                break;
-            }
-            usleep(10000);
-        }
-        if (time_wait_ack < PKT_RCV_TIMEOUT) {
+        usleep(10000);//0.1s for receier to respond
+        int recv_size = static_cast<int>(recv(socket, &rcv_packet, sizeof(struct tftp_packet), MSG_DONTWAIT));//MSG_DONTWAIT->nonblock receive
+        if (recv_size >= 4 && rcv_packet.cmd == htons(ACK) && rcv_packet.block == packet->block) {
+            //printf("received ACK");
             break;
-        } else {
-            // Retransmission.
-            continue;
+        }
+        else{
+            sleep(1);
         }
     }
-    if (rxmt == PKT_MAX_RXMT) {
-        // send timeout
-        printf("Sent packet exceeded PKT_MAX_RXMT.\n");
-        return -1;
+    if (retry_counter >= MAX_RETRY_RECV) {
+        // send timeout 10s
+        fprintf(stderr,"Sent packet exceeded MAX_RETRY_RECV TIME[%ds]",PKT_MAX_RXMT);
+        return EXIT_FAILURE;
     }
-
-    return size;
+    return EXIT_SUCCESS;
 }

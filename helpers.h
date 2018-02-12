@@ -1,8 +1,6 @@
 #pragma once
-
 #include <netdb.h>
 #include <string>
-
 #define BUF_LEN 512
 #define MAXFILENAMELENGTH 256
 #define DATA_SIZE 512
@@ -16,10 +14,11 @@
 #define PORT 8000
 #define MAX_REQUEST_SIZE 1024
 // Max packet retransmission.
-#define PKT_MAX_RXMT 3
-#define PKT_SND_TIMEOUT 12*1000*1000
+#define PKT_MAX_RXMT 10
+#define MAX_RETRY_SEND 10
+#define MAX_RETRY_RECV 10
 #define PKT_RCV_TIMEOUT 3*1000*1000
-static char conf_document_root[MAXFILENAMELENGTH] = ".";
+static char DEFAULT_DIRECTORY[MAXFILENAMELENGTH] = ".";
 
 typedef struct {
     unsigned short int opcode;
