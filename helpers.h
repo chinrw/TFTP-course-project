@@ -11,7 +11,7 @@
 #define ACK 4
 #define ERROR 5
 
-#define PORT 8000
+#define PORT 0
 #define MAX_REQUEST_SIZE 1024
 // Max packet retransmission.
 #define PKT_MAX_RXMT 10
