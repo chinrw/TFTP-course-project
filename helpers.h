@@ -15,7 +15,7 @@
 #define PKT_MAX_RXMT 10
 #define MAX_RETRY_SEND 10
 #define MAX_RETRY_RECV 10
-#define PKT_RCV_TIMEOUT 3*1000*1000
+#define PKT_RCV_TIMEOUT 1500
 static char DEFAULT_DIRECTORY[MAXFILENAMELENGTH] = ".";
 
 typedef struct {

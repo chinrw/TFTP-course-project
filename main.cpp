@@ -132,7 +132,7 @@ void handle_read(int socket, struct tftp_request *request) {
     printf("RRQ for file[%s]\n", fullpath);
 
     FILE *fp = fopen(fullpath, "r");
-    if (fp == NULL) {
+    if (fp == nullptr) {
         fclose(fp);
         perror("File not exists!\n");
         return;
@@ -144,7 +144,7 @@ void handle_read(int socket, struct tftp_request *request) {
     do {
         send_packet.block = htons(counter);
         memset(send_packet.data, 0, sizeof(send_packet.data));
-        send_size = fread(send_packet.data, 1, DATA_SIZE, fp);
+        send_size = static_cast<int>(fread(send_packet.data, 1, DATA_SIZE, fp));
         if (send_data(socket, &send_packet, send_size + 4) == -1) {
             fprintf(stderr, "failed to send packet number[%d]\n", counter);
             fclose(fp);
@@ -169,15 +169,9 @@ void handle_write(int socket, struct tftp_request *request) {
     struct tftp_packet ack_packet, rcv_packet;
     char fullpath[MAXFILENAMELENGTH] = {0};
     char *inputfile = request->packet.filename;    // request file
-    char *mode = inputfile + strlen(inputfile) + 1;
-    char *blocksize_str = mode + strlen(mode) + 1;
-    int blocksize = atoi(blocksize_str);
 
-    if (blocksize <= 0 || blocksize > DATA_SIZE) {
-        blocksize = DATA_SIZE;
-    }
 
-    if (strlen(inputfile) + strlen(DEFAULT_DIRECTORY) > sizeof(fullpath) - 1) {
+    if (strlen(inputfile) + strlen(DEFAULT_DIRECTORY) >= MAXFILENAMELENGTH) {
         perror("request path too long");
         return;
     }
@@ -190,24 +184,24 @@ void handle_write(int socket, struct tftp_request *request) {
     }
     strcat(fullpath, inputfile);
 
-    printf("WRQ: \"%s\", blocksize=%d\n", fullpath, blocksize);
+    printf("WRQ for file [%s]\n", fullpath);
 
 
     FILE *fp = fopen(fullpath, "r");
-    if (fp != NULL) {
+    if (fp != nullptr) {
         // send error packet
         fclose(fp);
-        printf("File \"%s\" already exists.\n", fullpath);
+        printf("File %s already exists.\n", fullpath);
         return;
     }
 
     fp = fopen(fullpath, "w");
-    if (fp == NULL) {
-        printf("File \"%s\" create error.\n", fullpath);
+    if (fp == nullptr) {
+        printf("File %s create error.\n", fullpath);
         return;
     }
     int s_size = 0;
-    int r_size = 0;
+    int reci_data = 0;
     ushort block = 1;
     int time_wait_data;
 
@@ -215,42 +209,45 @@ void handle_write(int socket, struct tftp_request *request) {
     ack_packet.block = htons(0);
 
     if (send_ack(socket, &ack_packet, 4) == -1) {
-        fprintf(stderr, "Error occurs when sending ACK = %d.\n", 0);
-        goto wrq_error;
+        fprintf(stderr, "Error occurs when sending ACK = %d.\n", -1);
+        fclose(fp);
+        return;
     }
 
     do {
-        for (time_wait_data = 0; time_wait_data < PKT_RCV_TIMEOUT * PKT_MAX_RXMT; time_wait_data += 20000) {
-            // Try receive(Nonblock receive).
-            r_size = static_cast<int>(recv(socket, &rcv_packet, sizeof(struct tftp_packet), MSG_DONTWAIT));
-            if (r_size > 0 && r_size < 4) {
-                printf("Bad packet: r_size=%d, blocksize=%d\n", r_size, blocksize);
+        for (time_wait_data = 0; time_wait_data < PKT_RCV_TIMEOUT; time_wait_data += 1) {
+            // Try receive
+            reci_data = static_cast<int>(recv(socket, &rcv_packet, sizeof(struct tftp_packet), MSG_DONTWAIT));
+            if (reci_data > 0 && reci_data < 4) {
+                printf("Bad packet: reci_data=%d", reci_data);
             }
-            if (r_size >= 4 && rcv_packet.cmd == htons(DATA) && rcv_packet.block == htons(block)) {
-                printf("DATA: block=%d, data_size=%d\n", ntohs(rcv_packet.block), r_size - 4);
+            if (reci_data >= 4 && rcv_packet.cmd == htons(DATA) && rcv_packet.block == htons(block)) {
+                printf("DATA: block=%d, data_size=%d\n", ntohs(rcv_packet.block), reci_data - 4);
                 // Valid DATA
-                fwrite(rcv_packet.data, 1, static_cast<size_t>(r_size - 4), fp);
+                fwrite(rcv_packet.data, 1, static_cast<size_t>(reci_data - 4), fp);
                 break;
             }
-            usleep(20000);
+            sleep(20);
         }
-        if (time_wait_data >= PKT_RCV_TIMEOUT * PKT_MAX_RXMT) {
+        if (time_wait_data >= PKT_RCV_TIMEOUT) {
             printf("Receive timeout.\n");
-            goto wrq_error;
+            fclose(fp);
+            return;
         }
 
         ack_packet.block = htons(block);
         if (send_ack(socket, &ack_packet, 4) == -1) {
             fprintf(stderr, "Error occurs when sending ACK = %d.\n", block);
-            goto wrq_error;
+            fclose(fp);
+            return;
         }
         printf("Send ACK=%d\n", block);
         block++;
-    } while (r_size == blocksize + 4);
 
-    printf("Receive file end.\n");
+    } while (reci_data == DATA_SIZE);
 
-    wrq_error:
+    printf("File Received.\n");
+
     fclose(fp);
 }
 
@@ -260,14 +257,14 @@ int send_data(int socket, struct tftp_packet *packet, int size) {
     int retry_counter = 0;
     for (retry_counter = 0; retry_counter <= MAX_RETRY_RECV; retry_counter++) {
         printf("Send block=%d\n", ntohs(packet->block));
-        if (send(socket, packet, size, 0) != size) {
+        if (send(socket, packet, static_cast<size_t>(size), 0) != size) {
             return -1;
         }
         usleep(10000);//0.1s for receier to respond
-        int recv_size = (recv(socket, &rcv_packet, sizeof(struct tftp_packet),
-                               MSG_DONTWAIT));//MSG_DONTWAIT->nonblock receive
+        auto recv_size = static_cast<int>(recv(socket, &rcv_packet, sizeof(struct tftp_packet),
+                                               MSG_DONTWAIT));//MSG_DONTWAIT->nonblock receive
         if (recv_size >= 4 && rcv_packet.cmd == htons(ACK) && rcv_packet.block == packet->block) {
-            //printf("received ACK");
+            // received ACK
             break;
         } else {
             sleep(1);
