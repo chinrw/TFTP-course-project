@@ -1,7 +1,8 @@
-*
+*.*
 !main.cpp
 !helpers.h
 !CMakeLists.txt
 *.xml
 /cmake-build-debug
 /.idea
+*.md
