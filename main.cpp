@@ -261,7 +261,7 @@ int send_data(int socket, struct tftp_packet *packet, int size) {
             return -1;
         }
         usleep(10000);//0.1s for receier to respond
-        auto recv_size = static_cast<int>(recv(socket, &rcv_packet, sizeof(struct tftp_packet),
+        ushort recv_size = static_cast<int>(recv(socket, &rcv_packet, sizeof(struct tftp_packet),
                                                MSG_DONTWAIT));//MSG_DONTWAIT->nonblock receive
         if (recv_size >= 4 && rcv_packet.cmd == htons(ACK) && rcv_packet.block == packet->block) {
             // received ACK
