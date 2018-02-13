@@ -132,7 +132,7 @@ void handle_read(int socket, struct tftp_request *request) {
     printf("RRQ for file[%s]\n", fullpath);
 
     FILE *fp = fopen(fullpath, "r");
-    if (fp == nullptr) {
+    if (fp == NULL) {
         fclose(fp);
         perror("File not exists!\n");
         return;
@@ -188,7 +188,7 @@ void handle_write(int socket, struct tftp_request *request) {
 
 
     FILE *fp = fopen(fullpath, "r");
-    if (fp != nullptr) {
+    if (fp != NULL) {
         // send error packet
         fclose(fp);
         printf("File %s already exists.\n", fullpath);
@@ -196,7 +196,7 @@ void handle_write(int socket, struct tftp_request *request) {
     }
 
     fp = fopen(fullpath, "w");
-    if (fp == nullptr) {
+    if (fp == NULL) {
         printf("File %s create error.\n", fullpath);
         return;
     }
