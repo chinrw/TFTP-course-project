@@ -1,6 +1,4 @@
 #pragma once
-#include <netdb.h>
-#include <string>
 #define BUF_LEN 512
 #define MAXFILENAMELENGTH 256
 #define DATA_SIZE 512
@@ -23,7 +21,7 @@ static char DEFAULT_DIRECTORY[MAXFILENAMELENGTH] = ".";
 typedef struct {
     unsigned short int opcode;
     unsigned short int block;
-    char data[BUF_LEN];
+    char data[DATA_SIZE];
 } TFTP_Data;
 
 typedef struct {

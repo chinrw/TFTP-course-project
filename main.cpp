@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <cerrno>
 #include <unistd.h>
+#include <netdb.h>
 #include "helpers.h"
 
 void child_process(struct tftp_request *request);
@@ -18,7 +19,7 @@ void handle_read(int socket, struct tftp_request *request);
 
 void handle_write(int socket, struct tftp_request *request);
 
-int send_packet(int socket, struct tftp_packet *packet, int size);
+int send_data(int socket, struct tftp_packet *packet, int size);
 
 int main(int argc, char **argv) {
 
@@ -62,13 +63,13 @@ int main(int argc, char **argv) {
         } else if (pid == 0) {
             //child
             child_process(request);
-            break;
+            return EXIT_SUCCESS;
         } else {
             //parent
             continue;
         }
     }
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 void child_process(struct tftp_request *request) {
@@ -112,52 +113,45 @@ void child_process(struct tftp_request *request) {
 }
 
 void handle_read(int socket, struct tftp_request *request) {
-    struct tftp_packet snd_packet;
+    struct tftp_packet send_packet;
     char fullpath[MAXFILENAMELENGTH] = {0};
-    char *r_path = request->packet.filename;// request file
-    char *mode = r_path + strlen(r_path) + 1;
-    char *blocksize_str = mode + strlen(mode) + 1;
-    int blocksize = atoi(blocksize_str);
+    char *inputfile = request->packet.filename;// request file
 
-    if (blocksize <= 0 || blocksize > DATA_SIZE) {
-        blocksize = DATA_SIZE;
-    }
-
-    if (strlen(r_path) + strlen(DEFAULT_DIRECTORY) >= MAXFILENAMELENGTH) {
+    if (strlen(inputfile) + strlen(DEFAULT_DIRECTORY) >= MAXFILENAMELENGTH) {
         perror("request path too long");
         return;
     }
 
     // build fullpath
     strcpy(fullpath, DEFAULT_DIRECTORY);
-    if (r_path[0] != '/') {
+    if (inputfile[0] != '/') {
         strcat(fullpath, "/");
     }
-    strcat(fullpath, r_path);
+    strcat(fullpath, inputfile);
 
-    printf("RRQ: \"%s\", blocksize=%d\n", fullpath, blocksize);
+    printf("RRQ for file[%s]\n", fullpath);
 
     FILE *fp = fopen(fullpath, "r");
-    if (fp == nullptr) {
+    if (fp == NULL) {
         fclose(fp);
         perror("File not exists!\n");
         return;
     }
 
-    int s_size = 0;
-    ushort block = 1;
-    snd_packet.cmd = htons(DATA);
+    int send_size = 0;
+    ushort counter = 1;
+    send_packet.cmd = htons(DATA);
     do {
-        memset(snd_packet.data, 0, sizeof(snd_packet.data));
-        snd_packet.block = htons(block);
-        s_size = static_cast<int>(fread(snd_packet.data, 1, static_cast<size_t>(blocksize), fp));
-        if (send_packet(socket, &snd_packet, s_size + 4) == -1) {
-            fprintf(stderr, "Error occurs when sending packet.block = %d.\n", block);
+        send_packet.block = htons(counter);
+        memset(send_packet.data, 0, sizeof(send_packet.data));
+        send_size = fread(send_packet.data, 1, DATA_SIZE, fp);
+        if (send_data(socket, &send_packet, send_size + 4) == -1) {
+            fprintf(stderr, "failed to send packet number[%d]\n", counter);
             fclose(fp);
             return;
         }
-        block++;
-    } while (s_size == blocksize);
+        counter++;
+    } while (send_size == DATA_SIZE);
 
     printf("file sent\n");
     fclose(fp);
@@ -174,8 +168,8 @@ int send_ack(int sock, struct tftp_packet *packet, int size) {
 void handle_write(int socket, struct tftp_request *request) {
     struct tftp_packet ack_packet, rcv_packet;
     char fullpath[MAXFILENAMELENGTH] = {0};
-    char *r_path = request->packet.filename;    // request file
-    char *mode = r_path + strlen(r_path) + 1;
+    char *inputfile = request->packet.filename;    // request file
+    char *mode = inputfile + strlen(inputfile) + 1;
     char *blocksize_str = mode + strlen(mode) + 1;
     int blocksize = atoi(blocksize_str);
 
@@ -183,7 +177,7 @@ void handle_write(int socket, struct tftp_request *request) {
         blocksize = DATA_SIZE;
     }
 
-    if (strlen(r_path) + strlen(DEFAULT_DIRECTORY) > sizeof(fullpath) - 1) {
+    if (strlen(inputfile) + strlen(DEFAULT_DIRECTORY) > sizeof(fullpath) - 1) {
         perror("request path too long");
         return;
     }
@@ -191,16 +185,16 @@ void handle_write(int socket, struct tftp_request *request) {
     // build fullpath
     memset(fullpath, 0, sizeof(fullpath));
     strcpy(fullpath, DEFAULT_DIRECTORY);
-    if (r_path[0] != '/') {
+    if (inputfile[0] != '/') {
         strcat(fullpath, "/");
     }
-    strcat(fullpath, r_path);
+    strcat(fullpath, inputfile);
 
     printf("WRQ: \"%s\", blocksize=%d\n", fullpath, blocksize);
 
 
     FILE *fp = fopen(fullpath, "r");
-    if (fp != nullptr) {
+    if (fp != NULL) {
         // send error packet
         fclose(fp);
         printf("File \"%s\" already exists.\n", fullpath);
@@ -208,7 +202,7 @@ void handle_write(int socket, struct tftp_request *request) {
     }
 
     fp = fopen(fullpath, "w");
-    if (fp == nullptr) {
+    if (fp == NULL) {
         printf("File \"%s\" create error.\n", fullpath);
         return;
     }
@@ -261,7 +255,7 @@ void handle_write(int socket, struct tftp_request *request) {
 }
 
 
-int send_packet(int socket, struct tftp_packet *packet, int size) {
+int send_data(int socket, struct tftp_packet *packet, int size) {
     struct tftp_packet rcv_packet;
     int retry_counter = 0;
     for (retry_counter = 0; retry_counter <= MAX_RETRY_RECV; retry_counter++) {
@@ -270,7 +264,7 @@ int send_packet(int socket, struct tftp_packet *packet, int size) {
             return -1;
         }
         usleep(10000);//0.1s for receier to respond
-        auto recv_size = (recv(socket, &rcv_packet, sizeof(struct tftp_packet),
+        int recv_size = (recv(socket, &rcv_packet, sizeof(struct tftp_packet),
                                MSG_DONTWAIT));//MSG_DONTWAIT->nonblock receive
         if (recv_size >= 4 && rcv_packet.cmd == htons(ACK) && rcv_packet.block == packet->block) {
             //printf("received ACK");
