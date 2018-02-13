@@ -200,7 +200,6 @@ void handle_write(int socket, struct tftp_request *request) {
         printf("File %s create error.\n", fullpath);
         return;
     }
-    int s_size = 0;
     int reci_data = 0;
     ushort block = 1;
     int time_wait_data;
@@ -209,7 +208,7 @@ void handle_write(int socket, struct tftp_request *request) {
     ack_packet.block = htons(0);
 
     if (send_ack(socket, &ack_packet, 4) == -1) {
-        fprintf(stderr, "Error occurs when sending ACK = %d.\n", -1);
+        fprintf(stderr, "Error occurs when sending ACK = %d.\n", 0 );
         fclose(fp);
         return;
     }
@@ -223,7 +222,7 @@ void handle_write(int socket, struct tftp_request *request) {
             }
             if (reci_data >= 4 && rcv_packet.cmd == htons(DATA) && rcv_packet.block == htons(block)) {
                 printf("DATA: block=%d, data_size=%d\n", ntohs(rcv_packet.block), reci_data - 4);
-                // Valid DATA
+                //write data
                 fwrite(rcv_packet.data, 1, static_cast<size_t>(reci_data - 4), fp);
                 break;
             }
@@ -235,6 +234,7 @@ void handle_write(int socket, struct tftp_request *request) {
             return;
         }
 
+        //send accept
         ack_packet.block = htons(block);
         if (send_ack(socket, &ack_packet, 4) == -1) {
             fprintf(stderr, "Error occurs when sending ACK = %d.\n", block);
